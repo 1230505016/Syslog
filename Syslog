@@ -1,0 +1,104 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_LOG_LENGTH 256
+#define MAX_LINES 1000      // Maksimum satır sayısı (bellek sınırı için)
+#define TAIL_LINES 10       // Gösterilecek son satır sayısı
+#define KEYWORD "CRON"      // Filtreleme anahtar kelimesi
+
+typedef struct Node {
+    char log[MAX_LOG_LENGTH];
+    struct Node* next;
+} Node;
+
+// Yeni düğüm oluştur
+Node* createNode(const char* log) {
+    Node* newNode = (Node*)malloc(sizeof(Node));
+    if (newNode != NULL) {
+        strncpy(newNode->log, log, MAX_LOG_LENGTH - 1);
+        newNode->log[MAX_LOG_LENGTH - 1] = '\0';
+        newNode->next = NULL;
+    }
+    return newNode;
+}
+
+// Listeye düğüm ekle
+void appendNode(Node** head, const char* log) {
+    Node* newNode = createNode(log);
+    if (*head == NULL) {
+        *head = newNode;
+    } else {
+        Node* temp = *head;
+        while (temp->next != NULL) {
+            temp = temp->next;
+        }
+        temp->next = newNode;
+    }
+}
+
+// Liste uzunluğunu bul
+int getListLength(Node* head) {
+    int count = 0;
+    while (head != NULL) {
+        count++;
+        head = head->next;
+    }
+    return count;
+}
+
+// Son X satırı yazdır
+void printLastLines(Node* head, int tailLines) {
+    int length = getListLength(head);
+    int skip = length - tailLines;
+
+    Node* current = head;
+    int index = 0;
+    while (current != NULL) {
+        if (index >= skip) {
+            // Filtreleme: Anahtar kelimeyi içeren satırları göster
+            if (strstr(current->log, KEYWORD) != NULL) {
+                printf("%s", current->log);
+            }
+        }
+        current = current->next;
+        index++;
+    }
+}
+
+// Belleği serbest bırak
+void freeList(Node* head) {
+    Node* temp;
+    while (head != NULL) {
+        temp = head;
+        head = head->next;
+        free(temp);
+    }
+}
+
+int main() {
+    FILE* file = fopen("/var/log/syslog", "r");
+    if (file == NULL) {
+        printf("Syslog dosyasi acilamadi.\n");
+        return 1;
+    }
+
+    Node* head = NULL;
+    char buffer[MAX_LOG_LENGTH];
+
+    // Satır satır oku ve listeye ekle
+    int lineCount = 0;
+    while (fgets(buffer, sizeof(buffer), file) != NULL && lineCount < MAX_LINES) {
+        appendNode(&head, buffer);
+        lineCount++;
+    }
+    fclose(file);
+
+    // Son 10 satırı filtreleyerek yazdır
+    printf("\n=== Son %d Satir (%s filtresi ile) ===\n", TAIL_LINES, KEYWORD);
+    printLastLines(head, TAIL_LINES);
+
+    // Belleği temizle
+    freeList(head);
+    return 0;
+}
